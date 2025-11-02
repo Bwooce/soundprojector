@@ -6,6 +6,8 @@ An ESP32-S2 based **parametric audio array** that creates highly directional aud
 
 This project uses **amplitude modulation** of a 40kHz ultrasonic carrier to create audible sound that propagates in a narrow, directional beam. The ultrasonic waves interact nonlinearly in the air itself, demodulating the audio signal and creating a "sound spotlight" effect.
 
+**Note:** The term "parametric array" refers to the **acoustic phenomenon** described by the Westervelt parametric array equations, not the number of transducers. A single high-intensity ultrasonic transducer is sufficient to create the effect - the "array" is the parametric interaction of sound waves in air, not a physical array of speakers.
+
 **How it works:**
 1. Audio signal modulates a 40kHz PWM carrier
 2. TPA3116 amplifier drives a 60W ultrasonic transducer
