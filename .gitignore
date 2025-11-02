@@ -1,0 +1,21 @@
+# User audio files
+data/audio.raw
+*.raw
+
+# Build artifacts
+*.bin
+*.elf
+*.map
+
+# IDE files
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# macOS
+.DS_Store
+
+# Temporary files
+*.tmp
