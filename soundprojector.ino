@@ -57,8 +57,12 @@
 
 // PWM Configuration
 #define PWM_CHANNEL 0        // LEDC channel for audio PWM
-#define PWM_FREQ 40000       // 40kHz carrier frequency
+#define PWM_FREQ 40000       // 40kHz carrier frequency (actual: ~39kHz due to clock constraints)
 #define PWM_RES 8            // 8-bit resolution (0-255)
+// Note: ESP32-S2 LEDC cannot generate exactly 40kHz at 8-bit resolution
+// Actual frequency will be ~39.06kHz or ~35.16kHz depending on clock divider
+// Use 6-bit (PWM_RES 6) for closer to 40kHz (40.32kHz), but reduces audio quality
+// 8-bit is recommended for better audio despite frequency error
 
 #ifdef ENABLE_STATUS_LED
   #define LED_CHANNEL 1      // LEDC channel for status LED (separate from audio)
@@ -151,9 +155,15 @@ void setup() {
   // NOTE: Must use ledcAttach(pin, freq, res) for ESP32-S2/S3
   // The older ledcAttachChannel() and ledcSetup()/ledcAttachPin() APIs don't work
   // ESP32-S2/S3 simplified the API: attach directly to pin, write directly to pin
-  ledcAttach(PWM_PIN, PWM_FREQ, PWM_RES);  // Attach pin with freq and resolution
-  Serial.printf("PWM configured: GPIO%d at %dkHz, %d-bit resolution\n",
-                PWM_PIN, PWM_FREQ/1000, PWM_RES);
+  uint32_t actual_freq = ledcAttach(PWM_PIN, PWM_FREQ, PWM_RES);  // Returns actual frequency
+  Serial.printf("PWM configured: GPIO%d, requested %dkHz, actual %.2fkHz, %d-bit resolution\n",
+                PWM_PIN, PWM_FREQ/1000, actual_freq/1000.0, PWM_RES);
+
+  if (abs((int)actual_freq - (int)PWM_FREQ) > 1000) {
+    Serial.printf("  WARNING: Actual frequency differs by %.1f%% due to clock divider constraints\n",
+                  abs((float)actual_freq - PWM_FREQ) / PWM_FREQ * 100);
+    Serial.println("  This is normal for ESP32 LEDC. Transducer should still work.");
+  }
 
   // Verify PWM is working by setting initial test value
   #ifdef TEST_MODE_DC
