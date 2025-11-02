@@ -57,12 +57,13 @@
 
 // PWM Configuration
 #define PWM_CHANNEL 0        // LEDC channel for audio PWM
-#define PWM_FREQ 40000       // 40kHz carrier frequency (actual: ~39kHz due to clock constraints)
+#define PWM_FREQ 39000       // Request 39kHz to force divider=8 (actual: 39.0625kHz)
 #define PWM_RES 8            // 8-bit resolution (0-255)
-// Note: ESP32-S2 LEDC cannot generate exactly 40kHz at 8-bit resolution
-// Actual frequency will be ~39.06kHz or ~35.16kHz depending on clock divider
-// Use 6-bit (PWM_RES 6) for closer to 40kHz (40.32kHz), but reduces audio quality
-// 8-bit is recommended for better audio despite frequency error
+// Note: ESP32-S2 LEDC uses 80MHz APB clock with integer dividers (truncated, not rounded)
+// Requesting <=39062 Hz forces divider=8, giving exactly 39062.5 Hz (2.34% error from 40kHz)
+// This is the closest to 40kHz while keeping 8-bit resolution (256 levels)
+// Requesting >39062 gives divider=7 (44.6kHz) - too far from transducer resonance
+// Alternative: 6-bit @ 40.32kHz (0.8% error) but only 64 levels - worse audio quality
 
 #ifdef ENABLE_STATUS_LED
   #define LED_CHANNEL 1      // LEDC channel for status LED (separate from audio)
@@ -155,14 +156,26 @@ void setup() {
   // NOTE: Must use ledcAttach(pin, freq, res) for ESP32-S2/S3
   // The older ledcAttachChannel() and ledcSetup()/ledcAttachPin() APIs don't work
   // ESP32-S2/S3 simplified the API: attach directly to pin, write directly to pin
-  uint32_t actual_freq = ledcAttach(PWM_PIN, PWM_FREQ, PWM_RES);  // Returns actual frequency
+
+  // Calculate expected actual frequency based on ESP32-S2 80MHz APB clock
+  // freq = APB_CLK / (divider * 2^resolution)
+  // divider is calculated as: APB_CLK / (requested_freq * 2^resolution)
+  const uint32_t apb_clock = 80000000;  // 80 MHz
+  uint32_t divider = apb_clock / (PWM_FREQ * (1 << PWM_RES));
+  if (divider == 0) divider = 1;  // Minimum divider
+  uint32_t actual_freq = apb_clock / (divider * (1 << PWM_RES));
+
+  ledcAttach(PWM_PIN, PWM_FREQ, PWM_RES);  // Attach pin with freq and resolution
+
   Serial.printf("PWM configured: GPIO%d, requested %dkHz, actual %.2fkHz, %d-bit resolution\n",
                 PWM_PIN, PWM_FREQ/1000, actual_freq/1000.0, PWM_RES);
+  Serial.printf("  (Calculated: APB 80MHz / divider %d / 2^%d = %.2fkHz)\n",
+                divider, PWM_RES, actual_freq/1000.0);
 
   if (abs((int)actual_freq - (int)PWM_FREQ) > 1000) {
     Serial.printf("  WARNING: Actual frequency differs by %.1f%% due to clock divider constraints\n",
                   abs((float)actual_freq - PWM_FREQ) / PWM_FREQ * 100);
-    Serial.println("  This is normal for ESP32 LEDC. Transducer should still work.");
+    Serial.println("  Consider changing PWM_RES to 6 or 7 bits for closer to 40kHz");
   }
 
   // Verify PWM is working by setting initial test value
